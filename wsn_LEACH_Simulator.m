@@ -1,4 +1,5 @@
 
+
 function [nodes, BS] = generate_wsn_topology(WSN)
 % Basic generation (Centered BS, random dist of sensors in a rectangle)
 
@@ -35,6 +36,7 @@ for i = 1:WSN.N
     nodes(i).type = 'N'; % placeholder for now, not doing anything with it
     nodes(i).last_CH_round = -1;
     nodes(i).role = 'NA';
+
 end
 end
 
@@ -308,6 +310,7 @@ WSN.k_data = 5000;        % Data packet size (bits)
 WSN.E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
 WSN.P = .05;                 % Desired portion of CHs
 WSN.Round = 1;               % Current Round
+WSN.Sensor_Range = hypot(WSN.height, WSN.width); % Sensor range, default to max
 
 % Topo func (currently a random rectangle with BS at center
 [WSN.nodes, WSN.BS] = generate_wsn_topology(WSN);
