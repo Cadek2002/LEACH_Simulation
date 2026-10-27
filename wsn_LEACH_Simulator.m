@@ -1,5 +1,3 @@
-
-
 function [nodes, BS] = generate_wsn_topology(WSN)
 % Basic generation (Centered BS, random dist of sensors in a rectangle)
 
