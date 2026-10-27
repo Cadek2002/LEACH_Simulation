@@ -8,15 +8,29 @@ classdef IDE < handle
         a double {mustBePositive} = .5;
         b double {mustBePositive} = .2;
         c double {mustBePositive} = .3;
-        m int16 {mustBePositive} = 25;
+        m {mustBePositive} = 25;
         context struct;
+        mutation_rate double {mustBePositive} = .9;
+        crossover_rate = .9;
+        exponential_crossover_prob = .6;
         P;
+        neighboorhood_size {mustBePositive} = 10;
+        x_L;
+        x_U;
+        D;
     end
 
+    
+    
+    
+    
+    
+    
     methods
-        function initialize_population(self, N, D, x_L, x_U, Q)
+        function initialize_population(self, N, D, Q)
             % Define J using the pop and Q (any odd number)
             J = 1;
+            self.D = D;
             
             if nargin < 5
                 Q = 3; % default Q, doesn't really matter
@@ -79,42 +93,38 @@ classdef IDE < handle
             end
         
             %if bounds are scalar, assume all the same ofc
-             if isscalar(x_L), x_L = x_L * ones(1, D); end
-             if isscalar(x_U), x_U = x_U * ones(1, D); end
+             if isscalar(self.x_L), self.x_L = self.x_L * ones(1, D); end
+             if isscalar(self.x_U), self.x_U = self.x_U * ones(1, D); end
         
             %normalize pop
             self.P = zeros(N, D);
             for j = 1:D
                 normalized = (A_trimmed(:, j) - min_A) / (max_A - min_A);
-                self.P(:, j) = normalized * (x_U(j) - x_L(j)) + x_L(j);
+                self.P(:, j) = normalized * (self.x_U(j) - self.x_L(j)) + self.x_L(j);
             end
         end
-        
-        
 
-        function fitness = evaluate(self, context, population, fitnessFunction)
-            fitness = arrayfun(@(row) fitnessFunction(population(row, :), context), ...
+        function fitness = evaluate(self, population, fitnessFunction)
+            fitness = arrayfun(@(row) fitnessFunction(population(row, :)), ...
                                1:size(population, 1));
         end
         
-        function score = CRPIDE_fitness(self, row, context)
+        function score = CRPIDE_fitness(self, row)
             VCH = 0;
-        
-            grid_score = 0;
+       
             %define vector of 0s of length equal to the number of nodes
             
-            covered = zeros(1, numel(context.N));
+            covered = zeros(1, self.context.N);
         
-            x_edges = linspace(0, context.width, self.m + 1);
-            y_edges = linspace(0, context.height, self.m + 1);
+            x_edges = linspace(0, self.context.width, self.m + 1);
+            y_edges = linspace(0, self.context.height, self.m + 1);
         
             gridCovered = false(self.m, self.m);
-            grid_score = 0;
 
             for k = 1:length(row)/2
                 virtual_x = row(2*k-1);
                 virtual_y = row(2*k);
-                VCH = VCH + hypot(virtual_x - context.BS.x, virtual_y - context.BS.y);
+                VCH = VCH + hypot(virtual_x - self.context.BS.x, virtual_y - self.context.BS.y);
         
                 
                 [x0, y0] = ndgrid(x_edges(1:end-1), y_edges(1:end-1));
@@ -122,21 +132,19 @@ classdef IDE < handle
         
                 % if the four corners of the grid are in range than the grid space
                 % is fully encompassed
-                enclosed = hypot(x0 - virtual_x, y0 - virtual_y) <= context.Sensor_Range & ...
-                           hypot(x0 - virtual_x, y1 - virtual_y) <= context.Sensor_Range & ...
-                           hypot(x1 - virtual_x, y0 - virtual_y) <= context.Sensor_Range & ...
-                           hypot(x1 - virtual_x, y1 - virtual_y) <= context.Sensor_Range;
+                enclosed = hypot(x0 - virtual_x, y0 - virtual_y) <= self.context.Sensor_Range & ...
+                           hypot(x0 - virtual_x, y1 - virtual_y) <= self.context.Sensor_Range & ...
+                           hypot(x1 - virtual_x, y0 - virtual_y) <= self.context.Sensor_Range & ...
+                           hypot(x1 - virtual_x, y1 - virtual_y) <= self.context.Sensor_Range;
        
         
-                newlyCovered = enclosed & ~gridCovered;
                 gridCovered = gridCovered | enclosed;
-                grid_score = grid_score + nnz(newlyCovered);
 
-                for j = 1:length(context.nodes)
-                    node = context.nodes(j);
+                for j = 1:length(self.context.nodes)
+                    node = self.context.nodes(j);
                     dist = hypot(node.x - virtual_x, node.y - virtual_y);
         
-                    if dist <= context.Sensor_Range
+                    if dist <= self.context.Sensor_Range
                         VCH = VCH + hypot(node.x - virtual_x, node.y - virtual_y);
                         covered(j) = 1;
                     end
@@ -145,19 +153,93 @@ classdef IDE < handle
         
             denom = 0;
         
-            for j = 1:length(context.nodes)
-                node = context.nodes(j);
-                denom = denom + hypot(node.x - context.BS.x, node.y - context.BS.y);
+            for j = 1:length(self.context.nodes)
+                node = self.context.nodes(j);
+                denom = denom + hypot(node.x - self.context.BS.x, node.y - self.context.BS.y);
             end 
         
             VCH = VCH / denom;
             grid_score = nnz(gridCovered);
 
             %full CRPIDE fitness function
-            score = self.alpha * VCH + self.beta * (sum(covered) / context.N) + self.gamma * (grid_score / (self.m + 1)^2); 
+            score = self.alpha * VCH + self.beta * (sum(covered) / self.context.N) + self.gamma * (grid_score / (self.m + 1)^2); 
         
         end
     
+        function debug = run_iteration(self)
+            population = self.P;
+            fitness = self.evaluate(population, @self.CRPIDE_fitness);
+            [bestFitness, bestIndex] = min(fitness);
+            self.P = population(bestIndex, :);
+
+            %Grab top 25% of performers from the current population
+            [~, rankedIndices] = sort(fitness, 'ascend');
+            eliteCount = max(1, ceil(0.25 * size(population, 1)));
+            elitePopulation = population(rankedIndices(1:eliteCount), :);
+            
+            % generate mutated population by taking each member of the
+            % population, and adding a random member of the elite
+            % population, minus the original member plus the difference
+            % between two distinct members of the population
+
+            populationSize = size(population, 1);
+            mutatedPopulation = zeros(size(population));
+            for i = 1:populationSize
+                elite = elitePopulation(randi(eliteCount), :);
+                indices = randperm(populationSize, 2);
+                mutatedPopulation(i, :) = population(i, :) + self.mutation_rate * (elite - population(i, :) + ...
+                    population(indices(1), :) - population(indices(2), :));
+            end
+
+            %Generate trial population using unitary / exponential
+
+            trialPopulation = population;
+            for i = 1:populationSize
+                if rand < self.exponential_crossover_prob %exponential
+                    startIndex = randi(size(population, 2));
+                    crossoverLength = randi(size(population, 2));
+                    indices = mod(startIndex - 1 + (0:crossoverLength-1), size(population, 2)) + 1;
+                    trialPopulation(i, indices) = mutatedPopulation(i, indices);
+                else %unitary
+                    mask = rand(1, size(population, 2)) < self.crossover_rate;
+                    mask(randi(size(population, 2))) = true;
+                    trialPopulation(i, mask) = mutatedPopulation(i, mask);
+                end
+            end
+            %clamp to playfield
+            for d = 1:self.D
+                trialPopulation(:, d) = max(min(trialPopulation(:, d), self.x_U(d)), self.x_L(d));
+            end
+
+            % run fitness on trial population
+            trialFitness = self.evaluate(trialPopulation, @self.CRPIDE_fitness);
+
+
+            %Conservitive selection: only let a trial member in if it beats
+            %its counterpart AND a quarter of randomly selected members of
+            %both pops
+            currentFitness = fitness;
+            replaceMask = false(populationSize, 1);
+            
+            neighborCount = min(self.neighboorhood_size, populationSize - 1); %neighborhood size bounds
+            requiredBeats = max(1, ceil(0.25 * neighborCount)); %neighboors needed to be beaten
+            
+            for i = 1:populationSize
+                pool = setdiff(1:populationSize, i);
+                neighborIndices = pool(randperm(numel(pool), neighborCount));
+            
+                beatsCurrent = trialFitness(i) < currentFitness(i);
+                beatsNeighbors = nnz(trialFitness(i) < max(currentFitness(neighborIndices), trialFitness(neighborIndices))) >= requiredBeats;
+            
+                replaceMask(i) = beatsCurrent && beatsNeighbors;
+            end
+            
+            population(replaceMask, :) = trialPopulation(replaceMask, :);
+
+            self.P = population;
+            debug = replaceMask;
+            
+        end
     end
 end
 
