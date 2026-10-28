@@ -3,14 +3,8 @@ import WSN.*
 %womp womp
 clear; clc; close all;
 
-params.alpha = .3;
-params.beta = .3;
-params.gamma = .4;
-mu = .5;
-a = .5;
-b = .2;
-c = .3;
-params.m = 25;
+
+net = WSN();
 
 %% WSN Network Setup
 net.N = 100;                 % Total nodes
@@ -24,9 +18,10 @@ net.Round = 1;               % Current Round
 net.Sensor_Range = hypot(net.height, net.width); % Sensor range, default to max
 
 % Topo func (currently a random rectangle with BS at center
-[net.nodes, net.BS] = WSN.generate_wsn_topology(net);
+net.generate_wsn_topology();
 
 % Initialize candidate virtual-node placements within the network bounds
+
 ide = IDE();
 ide.context = net;
 

@@ -1,45 +1,62 @@
-classdef WSN
-    methods(Static)
-        function [nodes, BS] = generate_wsn_topology(WSN)
+classdef WSN < matlab.mixin.Copyable
+    properties
+        %% WSN Network Setup
+        N = 100;                 % Total nodes
+        width = 400;             % Field width (meters)
+        height = 400;            % Field height (meters)
+        E_init = 0.5;          % Initial energy (Joules)
+        k_data = 5000;        % Data packet size (bits)
+        E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
+        P = .05;                 % Desired portion of CHs
+        Round = 1;               % Current Round
+        Sensor_Range = hypot(400, 400); % Sensor range, default to max
+        ch_indices;
+        nodes;
+        BS struct = struct();
+        initial_energy double = 0.5;
+    end
+
+    methods
+        function generate_wsn_topology(self)
         % Basic generation (Centered BS, random dist of sensors in a rectangle)
         
         % Default initial energy if not in the WSN struct
         if nargin < 4
-            WSN.initial_energy = 0.5;
+            self.initial_energy = 0.5;
         end
         
         % throw BS in the center
-        BS.x = WSN.width / 2;
-        BS.y = WSN.height / 2;
+        self.BS.x = self.width / 2;
+        self.BS.y = self.height / 2;
         
         % node structs
-        nodes = struct(...
-            'id', cell(1, WSN.N), ...
-            'x', cell(1, WSN.N), ...
-            'y', cell(1, WSN.N), ...
-            'E', cell(1, WSN.N), ...
-            'type', cell(1, WSN.N), ... % 'N' = Normal, 'C' = Cluster Head
-            'last_CH_round', cell(1, WSN.N) ...
+        self.nodes = struct(...
+            'id', cell(1, self.N), ...
+            'x', cell(1, self.N), ...
+            'y', cell(1, self.N), ...
+            'E', cell(1, self.N), ...
+            'type', cell(1, self.N), ... % 'N' = Normal, 'C' = Cluster Head
+            'last_CH_round', cell(1, self.N) ...
             );
         
         % give them all random positions
         %todo OOO make the generator function an input?
-        x_coords = rand(1, WSN.N) * WSN.width;
-        y_coords = rand(1, WSN.N) * WSN.height;
+        x_coords = rand(1, self.N) * self.width;
+        y_coords = rand(1, self.N) * self.height;
         
         %Populate the nodes
-        for i = 1:WSN.N
-            nodes(i).id = i;
-            nodes(i).x = x_coords(i);
-            nodes(i).y = y_coords(i);
-            nodes(i).E = WSN.initial_energy;
-            nodes(i).type = 'N'; % placeholder for now, not doing anything with it
-            nodes(i).last_CH_round = -1;
-            nodes(i).role = 'NA';
+        for i = 1:self.N
+            self.nodes(i).id = i;
+            self.nodes(i).x = x_coords(i);
+            self.nodes(i).y = y_coords(i);
+            self.nodes(i).E = self.initial_energy;
+            self.nodes(i).type = 'N'; % placeholder for now, not doing anything with it
+            self.nodes(i).last_CH_round = -1;
+            self.nodes(i).role = 'NA';
         end
         end
         
-        function [tx_node, rx_node, is_tx_dead] = send_packet(tx_node, rx_node, k_bits)
+        function [tx_node, rx_node, is_tx_dead] = send_packet(self, tx_node, rx_node, k_bits)
         % gives energy cost for sending packets from node-to-node
         % using the First Order Radio Model (LEACH standard parameters).
         %
@@ -102,7 +119,7 @@ classdef WSN
         end
         end
         
-        function visualize_WSN(WSN, ax)
+        function visualize_WSN(self, ax)
             
 
 if nargin < 2
@@ -112,24 +129,26 @@ else
     fig = ancestor(ax, 'figure');
 end
 
-% Draw w/ targeted acxis
+% Draw w/ targeted a
+% 
+% xis
 hold(ax, 'on'); 
 grid(ax, 'on');
 
 % Get data from node list for plotting/tooltips
-x_coords = [WSN.nodes.x];
-y_coords = [WSN.nodes.y];
-energies = [WSN.nodes.E];
-node_ids = [WSN.nodes.id];
-node_roles = {WSN.nodes.role};
+x_coords = [self.nodes.x];
+y_coords = [self.nodes.y];
+energies = [self.nodes.E];
+node_ids = [self.nodes.id];
+node_roles = {self.nodes.role};
 
 % Draw lines from nodes to CHs
 h_line = gobjects(0);
-for i = 1:WSN.N
-    if strcmp(WSN.nodes(i).role, 'MEMBER') && WSN.nodes(i).cluster_head_id > 0
-        ch_idx = WSN.nodes(i).cluster_head_id;
-        h_line = line(ax, [WSN.nodes(i).x, WSN.nodes(ch_idx).x], ...
-            [WSN.nodes(i).y, WSN.nodes(ch_idx).y], ...
+for i = 1:self.N
+    if strcmp(self.nodes(i).role, 'MEMBER') && self.nodes(i).cluster_head_id > 0
+        ch_idx = self.nodes(i).cluster_head_id;
+        h_line = line(ax, [self.nodes(i).x, self.nodes(ch_idx).x], ...
+            [self.nodes(i).y, self.nodes(ch_idx).y], ...
             'Color', [0.7 0.7 0.7], 'LineStyle', '--');
     end
 end
@@ -137,8 +156,8 @@ end
 % Draw CH markers, black for now cause theyre annoying and its pretty
 % obvious who the CHs are
 h_ch = gobjects(0);
-for ch_idx = WSN.ch_indices
-    h_ch = plot(ax, WSN.nodes(ch_idx).x, WSN.nodes(ch_idx).y, 'ks', ...
+for ch_idx = self.ch_indices
+    h_ch = plot(ax, self.nodes(ch_idx).x, self.nodes(ch_idx).y, 'ks', ...
         'MarkerSize', 12, 'LineWidth', 2);
 end
 
@@ -156,7 +175,7 @@ c = colorbar(ax);
 c.Label.String = 'Remaining Energy (Joules)';
 
 % Limit colorbar scal from the starting energy to zero
-E_max = WSN.E_init;
+E_max = self.E_init;
 if max(energies) > E_max
     E_max = max(energies); % Just in case for some reason a node gains energy (Add solar powered nodes?)
 end
@@ -178,14 +197,14 @@ h_node.DataTipTemplate.DataTipRows(5) = rowRole;
 datacursormode(fig, 'on');
 
 % Base Station is a triangle
-h_bs = plot(ax, WSN.BS.x, WSN.BS.y, 'r^', 'MarkerFaceColor', 'r', 'MarkerSize', 14);
+h_bs = plot(ax, self.BS.x, self.BS.y, 'r^', 'MarkerFaceColor', 'r', 'MarkerSize', 14);
 
 % Labels
-title(ax, sprintf('WSN Node Energy Distribution & Cluster Topology (Round %d)', WSN.Round));
+title(ax, sprintf('WSN Node Energy Distribution & Cluster Topology (Round %d)', self.Round));
 xlabel(ax, 'X Position (m)');
 ylabel(ax, 'Y Position (m)');
-xlim(ax, [0, WSN.width]);
-ylim(ax, [0, WSN.height]);
+xlim(ax, [0, self.width]);
+ylim(ax, [0, self.height]);
 
 % Legend handles
 legend(ax, [h_node, h_ch, h_bs, h_line], ...
@@ -193,8 +212,7 @@ legend(ax, [h_node, h_ch, h_bs, h_line], ...
     'Location', 'northeastoutside');
 end
     
-
-        function visualize_WSN_history(history)
+        function visualize_WSN_history(self, history)
     num_rounds = length(history);
     % WINDOW
     fig = figure('Name', 'WSN LEACH Simulation Viewer', ...
@@ -238,5 +256,71 @@ end
     end
 end
 
+    % Original LEECH assignment, 1/P-round Cycles where everyone is a CH in
+    % that time
+    function LEACH_Clustering(self)
+        self.ch_indices = [];
+    
+        % Default all nodes to MEMBER
+        for i = 1:self.N
+            self.nodes(i).role = 'MEMBER';
+            self.nodes(i).cluster_head_id = 0;
+        end
+    
+        cycle_length = 1 / self.P;
+        current_cycle_round = mod(self.Round - 1, cycle_length);
+    
+        % Calculate cycle start round for current cycle (1, 21, 41, etc.)
+        cycle_start_round = (floor((self.Round - 1) / cycle_length) * cycle_length) + 1;
+    
+        % Probability threshold for current round in cycle
+        T_n = self.P / (1 - self.P * current_cycle_round);
+        assignment_thresholds = rand(1, self.N);
+    
+        for i = 1:self.N
+            % Skip dead nodes
+            if self.nodes(i).E <= 0
+                continue;
+            end
+    
+            % Node is eligible if it hasn't served as CH in the CURRENT cycle
+            is_eligible = (self.nodes(i).last_CH_round < cycle_start_round);
+    
+            if is_eligible
+                if assignment_thresholds(i) < T_n
+                    self.nodes(i).role = 'CH';
+                    self.nodes(i).last_CH_round = self.Round;
+                    self.nodes(i).cluster_head_id = -1;
+                    self.ch_indices(end + 1) = i;
+                end
+            end
+        end
+    end
+    
+    % Literally just randomly assigns the required percentage of CHs every
+    % round
+    function random_Clustering(self)
+        num_CHs = round(0.05 * self.N);
+        self.ch_indices = randperm(self.N, num_CHs); 
+        % Default all ndoes to Member
+        for i = 1:self.N
+            self.nodes(i).role = 'MEMBER';
+            self.nodes(i).cluster_head_id = 0;
+        end
+        % Give CHs their role
+        for i = self.ch_indices
+            self.nodes(i).role = 'CH';
+            self.nodes(i).cluster_head_id = -1;
+        end
+    end
+
+
+
+    end
+
+    methods (Access = protected)
+        function cpObj = copyElement(obj)
+            cpObj = copyElement@matlab.mixin.Copyable(obj);
+        end
     end
 end
