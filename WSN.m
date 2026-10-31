@@ -2,8 +2,8 @@ classdef WSN < matlab.mixin.Copyable
     properties
         %% WSN Network Setup
         N = 100;                 % Total nodes
-        width = 400;             % Field width (meters)
-        height = 400;            % Field height (meters)
+        field_width = 400;             % Field width (meters)
+        field_height = 400;            % Field height (meters)
         E_init = 0.5;          % Initial energy (Joules)
         k_data = 5000;        % Data packet size (bits)
         E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
@@ -26,8 +26,8 @@ classdef WSN < matlab.mixin.Copyable
         end
         
         % throw BS in the center
-        self.BS.x = self.width / 2;
-        self.BS.y = self.height / 2;
+        self.BS.x = self.field_width / 2;
+        self.BS.y = self.field_height / 2;
         
         % node structs
         self.nodes = struct(...
@@ -41,8 +41,8 @@ classdef WSN < matlab.mixin.Copyable
         
         % give them all random positions
         %todo OOO make the generator function an input?
-        x_coords = rand(1, self.N) * self.width;
-        y_coords = rand(1, self.N) * self.height;
+        x_coords = rand(1, self.N) * self.field_width;
+        y_coords = rand(1, self.N) * self.field_height;
         
         %Populate the nodes
         for i = 1:self.N
@@ -194,6 +194,8 @@ h_node.DataTipTemplate.DataTipRows(4) = rowE;
 rowRole = dataTipTextRow('Role', node_roles);
 h_node.DataTipTemplate.DataTipRows(5) = rowRole;
 
+
+
 datacursormode(fig, 'on');
 
 % Base Station is a triangle
@@ -203,8 +205,8 @@ h_bs = plot(ax, self.BS.x, self.BS.y, 'r^', 'MarkerFaceColor', 'r', 'MarkerSize'
 title(ax, sprintf('WSN Node Energy Distribution & Cluster Topology (Round %d)', self.Round));
 xlabel(ax, 'X Position (m)');
 ylabel(ax, 'Y Position (m)');
-xlim(ax, [0, self.width]);
-ylim(ax, [0, self.height]);
+xlim(ax, [0, self.field_width]);
+ylim(ax, [0, self.field_height]);
 
 % Legend handles
 legend(ax, [h_node, h_ch, h_bs, h_line], ...
@@ -314,10 +316,134 @@ end
         end
     end
 
+    % Assignes clusters based on a set of virtual clusters and a priority
+    % system
+    function CRPIDE_Clustering(self, ide)
+        % Default all nodes to MEMBER
+        for i = 1:self.N
+            self.nodes(i).role = 'MEMBER';
+            self.nodes(i).cluster_head_id = 0;
+        end
+        self.ch_indices = [];
+
+        %CH election
+        for i = 1:ide.D
+            %get distance of each node to the VCH
+            distances = hypot([self.nodes.x] - ide.top_member.x(i), [self.nodes.y] - ide.top_member.y(i));
+
+            %calc priorities
+            denom = max(distances)/min(distances);
+            priorities = ide.mu * ((max(distances) - distances)/denom) + (1-ide.mu) * ([self.nodes.E] / self.E_init);
+            %get best node that hasnt already been picked yet
+            candidateIdx = setdiff(1:numel(priorities), self.ch_indices);
+            [~, localMax] = max(priorities(candidateIdx));
+            maxIndex = candidateIdx(localMax);
+            
+            %select the candidate node
+            if ~ismember(maxIndex, self.ch_indices)
+                self.ch_indices(end + 1) = maxIndex;
+                self.nodes(maxIndex).role = 'CH';
+                self.nodes(maxIndex).cluster_head_id = -1;
+            end
+        end
+
+
+        
+    end
+
+    function LEACH_ClusterAssignment(self)
+        for i = 1:self.N
+            if strcmp(self.nodes(i).role, 'MEMBER')
+                min_dist = Inf;
+                closest_ch = 0;
+                for ch_idx = self.ch_indices
+                    d = sqrt((self.nodes(i).x - self.nodes(ch_idx).x)^2 + (self.nodes(i).y - self.nodes(ch_idx).y)^2);
+                    if d < min_dist
+                        min_dist = d;
+                        closest_ch = ch_idx;
+                    end
+                end
+                self.nodes(i).cluster_head_id = closest_ch;
+            end
+        end
+    end
+        
+    function CRPIDE_ClusterAssignment(self, ide)
+
+        %CH Selection
+        % assign each alive node to a CH (as long as it isnt one) default
+        % to Base Station
+        for nodeIdx = 1:self.N
+            if strcmp(self.nodes(nodeIdx).role, 'MEMBER') && self.nodes(nodeIdx).E > 0
+
+                %grab all ch_indices within sensor range
+                eligibleCh = self.ch_indices(distances <= self.Sensor_Range);
+
+                %if eligibleCH is empty or if the base station is within
+                if isempty(eligibleCh) || hypot(self.nodes.x - self.BS.x, self.nodes.y - self.BS.y) <= self.Sensor_Range
+                    continue;
+                end
+
+                distances = hypot([self.nodes(eligibleCh).x] - self.nodes(nodeIdx).x, ...
+                    [self.nodes(eligibleCh).y] - self.nodes(nodeIdx).y);
+
+                priorities = ide.a * ((max(distances) - distances)/ max(distances))...
+                    + ide.b * ((self.nodes(nodeIdx).E * [self.nodes(eligibleCh).E]) / self.E_init)...
+                    + ide.c * (self.E_init / distances);
+
+
+                [~, bestCh] = max(priorities); 
+                self.nodes(nodeIdx).cluster_head_id = self.ch_indices(bestCh);
+            end
+        end
+    end
+
+    function transmission_plan = LEACH_Transmission_Plan(self)
+        transmission_plan = zeros(self.ch_indices);
+        for ch = 1:length(self.ch_indices)+1
+            %literally just go right to the base station
+            transmission_plan(ch) = [ch, -1];
+        end
+    end
+
+    function transmission_plan = CRPIDE_Transmission_Plan(self, ide)
+        transmission_plan = zeros(self.ch_indices);
+
+        cluster_heads = [self.nodes(self.ch_indices)];
+
+        distances = hypot(cluster_heads.x - self.BS.x, cluster_heads.y - self.BS.y);
+        
+        [~, sortedOrder] = sort(distances, 'descend');
+        %distances = distances(sortedOrder);
+
+
+        cluster_heads = cluster_heads(sortedOrder);
+
+        %iterate through sorted list of cluster heads
+
+        for ch = 1:numel(cluster_heads)+1
+
+            %select the cluster heads that are within a 90 degree angle of
+            %the current node relative to the base station and who are
+            %closer to the base station
+
+            %calculate angle of cluster_heads(ch) and base station
+            currentHead = cluster_heads(ch);
+            headAngles = atan2([cluster_heads.y] - self.BS.y, ...
+                [cluster_heads.x] - self.BS.x);
+            currentAngle = atan2(currentHead.y - self.BS.y, currentHead.x - self.BS.x);
+            angleDifference = abs(atan2(sin(headAngles - currentAngle), cos(headAngles - currentAngle)));
+
+
+            candidates = find(angleDifference <= pi/4 & distances(sortedOrder) < distances(sortedOrder(ch)));
+
+
+
+            priorities = ide.a * (cluster_heads.i / (sum() / length() )) + ide.b * () + ide.c * ()
+        end
 
 
     end
-
     methods (Access = protected)
         function cpObj = copyElement(obj)
             cpObj = copyElement@matlab.mixin.Copyable(obj);

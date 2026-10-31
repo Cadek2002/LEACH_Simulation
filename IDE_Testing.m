@@ -23,25 +23,7 @@ net.generate_wsn_topology();
 % Initialize candidate virtual-node placements within the network bounds
 
 ide = IDE();
-ide.context = net;
 
+ide.run(net, 100, 10)
 
-numVirtualNodes = 10;
-ide.x_L = repmat([0, 0], 1, numVirtualNodes);
-ide.x_U = repmat([net.width, net.height], 1, numVirtualNodes);
-
-ide.initialize_population(50, 2 * numVirtualNodes, 3);
-
-for i = 1:100
-    ide.run_iteration();
-end
-
-fitness = ide.evaluate(ide.P, @(row) ide.CRPIDE_fitness(row));
-varNames = [compose("x%d", 1:size(ide.P, 2)), "fitness"];
-
-% Round both population and fitness to 2 decimal places numerically
-P_rounded = round(ide.P, 2);
-fit_rounded = round(fitness(:), 2);
-
-T = array2table([P_rounded, fit_rounded], 'VariableNames', cellstr(varNames));
-disp(T)
+disp(ide.top_member)

@@ -31,31 +31,26 @@ for r = 1:num_rounds
     net.LEACH_Clustering();
     
     
-    % Assign each member node to its closest CH
-    for i = 1:net.N
-        if strcmp(net.nodes(i).role, 'MEMBER')
-            min_dist = Inf;
-            closest_ch = 0;
-            for ch_idx = net.ch_indices
-                d = sqrt((net.nodes(i).x - net.nodes(ch_idx).x)^2 + (net.nodes(i).y - net.nodes(ch_idx).y)^2);
-                if d < min_dist
-                    min_dist = d;
-                    closest_ch = ch_idx;
-                end
-            end
-            net.nodes(i).cluster_head_id = closest_ch;
-        end
-    end
     
-    %% Member nodes transmit to CHs
+    %assign each member node to its closest CH
+    net.LEACH_Clustering();
+    net.LEACH_ClusterAssignment();
+
+    %build a transmission plan
+    net.LEACH_TransmissionPlan();
     
+    %Send to CHs
     for i = 1:net.N
         if strcmp(net.nodes(i).role, 'MEMBER') && net.nodes(i).E > 0
             ch_idx = net.nodes(i).cluster_head_id;
             
             % Store current state of member and assigned CH
             tx = net.nodes(i);
-            rx = net.nodes(ch_idx);
+            if ch_idk == -1
+                rx = net.nodes(ch_idx);
+            else
+                rx = net.BS;
+            end
             
             % Transmit packet from member to CH
             [tx_updated, rx_updated, ~] = net.send_packet(tx, rx, net.k_data);
@@ -65,6 +60,8 @@ for r = 1:num_rounds
             net.nodes(ch_idx).E = rx_updated.E;
         end
     end
+
+
     
     % CHs agg and send to BS
     for ch_idx = net.ch_indices
@@ -76,6 +73,7 @@ for r = 1:num_rounds
             E_agg = (cluster_members + 1) * net.k_data * net.E_DA;
             net.nodes(ch_idx).E = max(0, net.nodes(ch_idx).E - E_agg);
             
+
             % Transmit to BS
             [tx_updated, ~, ~] = net.send_packet(net.nodes(ch_idx), net.BS, net.k_data);
             net.nodes(ch_idx).E = tx_updated.E;

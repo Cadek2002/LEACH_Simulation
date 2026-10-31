@@ -18,12 +18,9 @@ classdef IDE < handle
         x_L;
         x_U;
         D;
+        top_member;
+        top_member_vector;
     end
-
-    
-    
-    
-    
     
     
     methods
@@ -239,6 +236,39 @@ classdef IDE < handle
             self.P = population;
             debug = replaceMask;
             
+        end
+    
+        function run(self, context, numIterations, populationSize)
+            self.context = context;
+
+
+
+            numVirtualNodes = populationSize;
+            self.x_L = repmat([0, 0], 1, numVirtualNodes);
+            self.x_U = repmat([self.context.width, self.context.height], 1, numVirtualNodes);
+
+            self.initialize_population(50, 2 * numVirtualNodes, 3);
+
+            for i = 1:numIterations
+                self.run_iteration();
+            end
+
+
+
+            fitness = self.evaluate(self.P, @(row) self.CRPIDE_fitness(row));
+            varNames = [compose("x%d", 1:size(self.P, 2)), "fitness"];
+
+            %round to 2 decimal places
+            P_rounded = round(self.P, 2);
+            fit_rounded = round(fitness(:), 2);
+
+            T = array2table([P_rounded, fit_rounded], 'VariableNames', cellstr(varNames));
+
+            %best node placement
+            [~, bestIndex] = min(fitness);
+            self.top_member_vector = reshape(self.P(bestIndex, :), 2, []).';
+            self.top_member = array2table(self.top_member_vector, ...
+                'VariableNames', {'x', 'y'});
         end
     end
 end
