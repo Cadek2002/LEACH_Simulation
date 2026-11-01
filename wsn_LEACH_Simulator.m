@@ -45,13 +45,13 @@ for r = 1:num_rounds
 
 
     % Clustering Algo
-    net.CRPIDE_Clustering(ide);
+    net.LEACH_Clustering(ide);
 
 
 
     %assign each member node to its closest CH
-    net.CRPIDE_Clustering();
-    net.CRPIDE_ClusterAssignment();
+    net.LEACH_Clustering();
+    net.LEACH_ClusterAssignment();
 
 
 
