@@ -10,14 +10,14 @@ net = WSN();
 
 %% WSN Network Setup
 net.N = 100;                 % Total nodes
-net.width = 400;             % Field width (meters)
-net.height = 400;            % Field height (meters)
+net.field_width = 400;             % Field width (meters)
+net.field_height = 400;            % Field height (meters)
 net.E_init = 0.5;          % Initial energy (Joules)
 net.k_data = 5000;        % Data packet size (bits)
 net.E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
 net.P = .05;                 % Desired portion of CHs
 net.Round = 1;               % Current Round
-net.Sensor_Range = hypot(net.height, net.width); % Sensor range, default to max
+net.Sensor_Range = hypot(net.field_height, net.field_width); % Sensor range, default to max
 
 % Topo func (currently a random rectangle with BS at center
 net.generate_wsn_topology();
@@ -36,8 +36,7 @@ for r = 1:num_rounds
     net.LEACH_Clustering();
     net.LEACH_ClusterAssignment();
 
-    %build a transmission plan
-    net.LEACH_TransmissionPlan();
+
 
 
 
@@ -48,7 +47,7 @@ for r = 1:num_rounds
             
             % Store current state of member and assigned CH
             tx = net.nodes(i);
-            if ch_idk == -1
+            if ch_idx ~= -1
                 rx = net.nodes(ch_idx);
             else
                 rx = net.BS;
@@ -59,12 +58,14 @@ for r = 1:num_rounds
             
             % Update new Energy for node and CH to receive
             net.nodes(i).E = tx_updated.E;
-            net.nodes(ch_idx).E = rx_updated.E;
+            if ch_idx ~= -1
+                net.nodes(ch_idx).E = rx_updated.E;
+            end
         end
     end
 
-    %CHs 
-    transmission_plan = net.execute_transmission_plan();
+    %Build CH transmission plan and execute
+    transmission_plan = net.LEACH_Transmission_Plan();
     net.execute_transmission_plan(transmission_plan);
     
     % % CHs agg and send to BS

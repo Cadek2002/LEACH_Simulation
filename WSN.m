@@ -284,7 +284,7 @@ end
             if self.nodes(i).E <= 0
                 continue;
             end
-    
+
             % Node is eligible if it hasn't served as CH in the CURRENT cycle
             is_eligible = (self.nodes(i).last_CH_round < cycle_start_round);
     
@@ -301,7 +301,7 @@ end
     
     % Literally just randomly assigns the required percentage of CHs every
     % round
-    function random_Clustering(self)
+    function random_Clustering(self) 
         num_CHs = round(0.05 * self.N);
         self.ch_indices = randperm(self.N, num_CHs); 
         % Default all ndoes to Member
@@ -353,7 +353,11 @@ end
 
     function LEACH_ClusterAssignment(self)
         for i = 1:self.N
-            if strcmp(self.nodes(i).role, 'MEMBER')
+            if self.nodes(i).E <= 0
+                continue;
+            end
+
+            if strcmp(self.nodes(i).role, 'MEMBER') && self.nodes(i).E ~= 0
                 min_dist = Inf;
                 closest_ch = 0;
                 for ch_idx = self.ch_indices
@@ -399,10 +403,12 @@ end
     end
 
     function transmission_plan = LEACH_Transmission_Plan(self)
-        transmission_plan = zeros(self.ch_indices);
-        for ch = 1:length(self.ch_indices)+1
-            %literally just go right to the base station
-            transmission_plan(ch) = [ch, -1];
+        num_chs = numel(self.ch_indices);
+        transmission_plan = zeros(num_chs, 2);
+
+        for i = 1:num_chs
+            ch_idx = self.ch_indices(i);
+            transmission_plan(i, :) = [ch_idx, -1];
         end
     end
 
@@ -451,7 +457,7 @@ end
             %candidate in the original ch_indices array
             
             candidateIdx = sortedOrder(candidates(maxPriorityIdx));
-            transmission_plan(ch) = [currentIdx, candidateIdx];
+            transmission_plan(ch, :) = [currentIdx, candidateIdx];
 
             end
         end
@@ -464,7 +470,7 @@ end
         % Count member transmissions assigned to each cluster head
         memberCounts = zeros(numel(self.ch_indices));
         for nodeIdx = 1:self.N
-            chIdx = self.nodes(nodeIdx).cluster_head_id;
+            chIdx = self.ch_indices == self.nodes(nodeIdx).cluster_head_id;
             if chIdx > 0
                 memberCounts(chIdx) = memberCounts(chIdx) + 1;
             end
