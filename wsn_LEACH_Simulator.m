@@ -18,40 +18,40 @@ net.k_data = 5000;        % Data packet size (bits)
 net.E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
 net.P = .05;                 % Desired portion of CHs
 net.Round = 1;               % Current Round
-net.Sensor_Range = hypot(net.field_height, net.field_width); % Sensor range, default to max
+net.Sensor_Range = 90; % Sensor range, default to max
 
 % Topo func (currently a random rectangle with BS at center
 net.generate_wsn_topology();
 
-num_rounds = 40;
+num_rounds = 2;
 history = cell(1, num_rounds);
 
 ide = IDE();
-ide.run(net, 100, 10)
+ide.run(net, 200, 50, 20)
 disp(ide.top_member)
 
-net.Copy()
+%net.Copy()
 
 for r = 1:num_rounds
     net.Round = r;
     % % Clustering Algo
     % net.LEACH_Clustering();
-    % 
-    % 
-    % 
+
+
+
     % %assign each member node to its closest CH
     % net.LEACH_Clustering();
     % net.LEACH_ClusterAssignment();
 
 
     % Clustering Algo
-    net.LEACH_Clustering(ide);
+    net.CRPIDE_Clustering(ide);
 
 
 
     %assign each member node to its closest CH
-    net.LEACH_Clustering();
-    net.LEACH_ClusterAssignment();
+    net.CRPIDE_Clustering(ide);
+    net.CRPIDE_ClusterAssignment(ide);
 
 
 
@@ -80,10 +80,12 @@ for r = 1:num_rounds
     end
 
     %Build CH transmission plan and execute
-    transmission_plan = net.LEACH_Transmission_Plan();
+    transmission_plan = net.CRPIDE_Transmission_Plan(ide);
     net.execute_transmission_plan(transmission_plan);
     
-    % % CHs agg and send to BS
+
+    
+    %send to BS
     % for ch_idx = net.ch_indices
     %     if net.nodes(ch_idx).E > 0
     %         % Count connected cluster members

@@ -14,6 +14,7 @@ classdef WSN < matlab.mixin.Copyable
         nodes;
         BS struct = struct();
         initial_energy double = 0.5;
+        transmission_plan;
     end
 
     methods
@@ -327,7 +328,7 @@ end
         self.ch_indices = [];
 
         %CH election
-        for i = 1:ide.D
+        for i = 1:ide.D/2
             %get distance of each node to the VCH
             distances = hypot([self.nodes.x] - ide.top_member.x(i), [self.nodes.y] - ide.top_member.y(i));
 
@@ -372,32 +373,49 @@ end
         end
     end
         
-    function CRPIDE_ClusterAssignment(self, ide)
-
-        %CH Selection
-        % assign each alive node to a CH (as long as it isnt one) default
-        % to Base Station
+   function CRPIDE_ClusterAssignment(self, ide)
+        % Assign each alive member node to an eligible CH based on priority,
+        % defaulting to Base Station (-1) if out of range.
         for nodeIdx = 1:self.N
             if strcmp(self.nodes(nodeIdx).role, 'MEMBER') && self.nodes(nodeIdx).E > 0
 
-                %grab all ch_indices within sensor range
-                eligibleCh = self.ch_indices(distances <= self.Sensor_Range);
+                % Calculate distances to all CHs
+                ch_x = [self.nodes(self.ch_indices).x];
+                ch_y = [self.nodes(self.ch_indices).y];
+                distances = hypot(ch_x - self.nodes(nodeIdx).x, ch_y - self.nodes(nodeIdx).y);
 
-                %if eligibleCH is empty or if the base station is within
-                if isempty(eligibleCh) || hypot(self.nodes.x - self.BS.x, self.nodes.y - self.BS.y) <= self.Sensor_Range
+                % Grab all ch_indices within sensor range
+                valid_mask = (distances <= self.Sensor_Range);
+                eligibleCh = self.ch_indices(valid_mask);
+                eligibleDistances = distances(valid_mask);
+
+                % If no CH is within sensor range, default to Base Station (-1)
+                if isempty(eligibleCh)
+                    self.nodes(nodeIdx).cluster_head_id = -1;
                     continue;
                 end
 
-                distances = hypot([self.nodes(eligibleCh).x] - self.nodes(nodeIdx).x, ...
-                    [self.nodes(eligibleCh).y] - self.nodes(nodeIdx).y);
+                % Priority calculation terms with safe handling for zero distances
+                max_d = max(eligibleDistances);
+                min_d = min(eligibleDistances);
+                if max_d == min_d
+                    term1 = zeros(size(eligibleDistances));
+                else
+                    term1 = (max_d - eligibleDistances) ./ (max_d - min_d); % normalized relative distance
+                end
 
-                priorities = ide.a * ((max(distances) - distances)/ max(distances))...
-                    + ide.b * ((self.nodes(nodeIdx).E * [self.nodes(eligibleCh).E]) / self.E_init)...
-                    + ide.c * (self.E_init / distances);
+                eligibleChNodes = self.nodes(eligibleCh);
+                term2 = (self.nodes(nodeIdx).E * [eligibleChNodes.E]) ./ (self.E_init ^ 2);
+                
+                safe_distances = max(eligibleDistances, 1e-3); % Prevent division by zero
+                term3 = self.E_init ./ safe_distances;
 
+                priorities = ide.a .* term1 + ide.b .* term2 + ide.c .* term3;
 
-                [~, bestCh] = max(priorities); 
-                self.nodes(nodeIdx).cluster_head_id = self.ch_indices(bestCh);
+                [~, bestEligibleIdx] = max(priorities); 
+                
+                % Correctly map back using eligibleCh rather than self.ch_indices
+                self.nodes(nodeIdx).cluster_head_id = eligibleCh(bestEligibleIdx);
             end
         end
     end
@@ -410,14 +428,15 @@ end
             ch_idx = self.ch_indices(i);
             transmission_plan(i, :) = [ch_idx, -1];
         end
+        self.transmission_plan = transmission_plan;
     end
 
     function transmission_plan = CRPIDE_Transmission_Plan(self, ide)
-        transmission_plan = zeros(self.ch_indices);
-
+        transmission_plan = zeros(numel(self.ch_indices), 2);
+        
         cluster_heads = [self.nodes(self.ch_indices)];
 
-        distances = hypot(cluster_heads.x - self.BS.x, cluster_heads.y - self.BS.y);
+        distances = hypot([cluster_heads.x] - self.BS.x, [cluster_heads.y] - self.BS.y);
         
         [distances, sortedOrder] = sort(distances, 'descend');
         %distances = distances(sortedOrder);
@@ -427,7 +446,7 @@ end
 
         %iterate through sorted list of cluster heads
 
-        for ch = 1:numel(cluster_heads)+1
+        for ch = 1:numel(cluster_heads)
             currentIdx = sortedOrder(ch);
 
             %calculate angle of cluster_heads(ch) and base station
@@ -441,15 +460,24 @@ end
 
             %No remaining Candidates = 
             if isempty(candidates)
-                transmission_plan(ch) = [currentIdx, -1];
-            
-            avg_candidate_energy = mean(candidates.E);
-            avg_candidate_distance = mean([hypot(candidates.x - self.BS.x, candidates.y - self.BS.y)]);
+                transmission_plan(ch, :) = [currentIdx, -1];
+                continue
+            end
+
+            avg_candidate_energy = mean([self.nodes(self.ch_indices(candidates)).E]);
+            avg_candidate_distance = mean(hypot([self.nodes(self.ch_indices(candidates)).x] - self.BS.x, [self.nodes(self.ch_indices(candidates)).y] - self.BS.y));
             avg_candidate_angle = mean(sin(angleDifference));
 
-            priorities = ide.a * (candidates.E / avg_candidate_energy) + ...
-                         ide.b * ((avg_candidate_distance)/([hypot(candidates.x - self.BS.x, candidates.y - self.BS.y)])) + ...
-                         ide.c * ((avg_candidate_angle) / ([sin(angleDifference)]));
+            ch_nodes = self.nodes(self.ch_indices(candidates));
+            energies = [ch_nodes.E];
+            x_coords = [ch_nodes.x];
+            y_coords = [ch_nodes.y];
+            
+            term1 = ide.a .* (energies ./ avg_candidate_energy);
+            term2 = ide.b .* (avg_candidate_distance ./ hypot(x_coords - self.BS.x, y_coords - self.BS.y));
+            term3 = ide.c .* (avg_candidate_angle ./ sin(angleDifference(candidates)));
+            
+            priorities = term1 + term2 + term3;
 
             [~, maxPriorityIdx] = max(priorities);
 
@@ -458,17 +486,18 @@ end
             
             candidateIdx = sortedOrder(candidates(maxPriorityIdx));
             transmission_plan(ch, :) = [currentIdx, candidateIdx];
-
-            end
+            
         end
-    end
+        self.transmission_plan = transmission_plan;
+        end
+    
 
     function execute_transmission_plan(self, transmission_plan)
         %create an array with the same number of elements as the ch_indices
         %array, then set each element to the number of nodes with that
         %index as its cluster_HEAD
         % Count member transmissions assigned to each cluster head
-        memberCounts = zeros(numel(self.ch_indices));
+        memberCounts = ones(length(self.ch_indices), 1);
         for nodeIdx = 1:self.N
             chIdx = self.ch_indices == self.nodes(nodeIdx).cluster_head_id;
             if chIdx > 0
@@ -482,12 +511,16 @@ end
         
         for planIdx = 1:size(transmission_plan, 1)
             
-            txIdx = transmission_plan(planIdx, 1);
-            rxIdx = transmission_plan(planIdx, 2);
+            txChIdx = transmission_plan(planIdx, 1);
+            rxChIdx = transmission_plan(planIdx, 2);
 
-            txChIdx = find(self.ch_indices == txIdx);
-            rxChIdx = find(self.ch_indices == rxIdx);
+            txIdx = self.ch_indices(txChIdx);
 
+            if rxChIdx ~= -1
+                rxIdx = self.ch_indices(rxChIdx);
+            else
+                rxIdx = -1;
+            end
             if txIdx <= 0 || self.nodes(txIdx).E <= 0
                 continue;
             end

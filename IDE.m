@@ -8,7 +8,7 @@ classdef IDE < handle
         a double {mustBePositive} = .5;
         b double {mustBePositive} = .2;
         c double {mustBePositive} = .3;
-        m {mustBePositive} = 25;
+        m {mustBePositive} = 100;
         context struct;
         mutation_rate double {mustBePositive} = .9;
         crossover_rate = .9;
@@ -24,10 +24,9 @@ classdef IDE < handle
     
     
     methods
-        function initialize_population(self, N, D, Q)
+        function initialize_population(self, N, Q)
             % Define J using the pop and Q (any odd number)
             J = 1;
-            self.D = D;
             
             if nargin < 5
                 Q = 3; % default Q, doesn't really matter
@@ -39,7 +38,7 @@ classdef IDE < handle
             while true
                 M = Q^J;
                 N_calc = (Q^J-1) / (Q-1);
-                if M >= N && N_calc >= D
+                if M >= N && N_calc >= self.D
                     break
                 end
                 J = J+1;
@@ -90,12 +89,12 @@ classdef IDE < handle
             end
         
             %if bounds are scalar, assume all the same ofc
-             if isscalar(self.x_L), self.x_L = self.x_L * ones(1, D); end
-             if isscalar(self.x_U), self.x_U = self.x_U * ones(1, D); end
+             if isscalar(self.x_L), self.x_L = self.x_L * ones(1, self.D); end
+             if isscalar(self.x_U), self.x_U = self.x_U * ones(1, self.D); end
         
             %normalize pop
-            self.P = zeros(N, D);
-            for j = 1:D
+            self.P = zeros(N, self.D);
+            for j = 1:self.D
                 normalized = (A_trimmed(:, j) - min_A) / (max_A - min_A);
                 self.P(:, j) = normalized * (self.x_U(j) - self.x_L(j)) + self.x_L(j);
             end
@@ -113,8 +112,8 @@ classdef IDE < handle
             
             covered = zeros(1, self.context.N);
         
-            x_edges = linspace(0, self.context.width, self.m + 1);
-            y_edges = linspace(0, self.context.height, self.m + 1);
+            x_edges = linspace(0, self.context.field_width, self.m + 1);
+            y_edges = linspace(0, self.context.field_height, self.m + 1);
         
             gridCovered = false(self.m, self.m);
 
@@ -159,7 +158,7 @@ classdef IDE < handle
             grid_score = nnz(gridCovered);
 
             %full CRPIDE fitness function
-            score = self.alpha * VCH + self.beta * (sum(covered) / self.context.N) + self.gamma * (grid_score / (self.m + 1)^2); 
+            score = self.alpha * VCH + self.beta * (sum(covered) / self.context.N) + self.gamma * (1 - (grid_score / (self.m + 1)^2)); 
         
         end
     
@@ -238,14 +237,15 @@ classdef IDE < handle
             
         end
     
-        function run(self, context, numIterations, populationSize)
+        function run(self, context, numIterations, populationSize, decisionVars)
             self.context = context;
+            self.D = decisionVars;
+            %TODO: This makes IDE behavior dependant on WSN, should make
+            %this an input instead of calculated
+            self.x_L = repmat([0, 0], 1, self.D);
+            self.x_U = repmat([self.context.field_width, self.context.field_height], 1, self.D);
 
-            numVirtualNodes = populationSize;
-            self.x_L = repmat([0, 0], 1, numVirtualNodes);
-            self.x_U = repmat([self.context.width, self.context.height], 1, numVirtualNodes);
-
-            self.initialize_population(50, 2 * numVirtualNodes, 3);
+            self.initialize_population(populationSize, 3);
 
             for i = 1:numIterations
                 self.run_iteration();
