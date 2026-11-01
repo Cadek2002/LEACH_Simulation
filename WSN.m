@@ -266,7 +266,7 @@ end
         % Default all nodes to MEMBER
         for i = 1:self.N
             self.nodes(i).role = 'MEMBER';
-            self.nodes(i).cluster_head_id = 0;
+            self.nodes(i).cluster_head_id = -1;
         end
     
         cycle_length = 1 / self.P;
@@ -307,7 +307,7 @@ end
         % Default all ndoes to Member
         for i = 1:self.N
             self.nodes(i).role = 'MEMBER';
-            self.nodes(i).cluster_head_id = 0;
+            self.nodes(i).cluster_head_id = -1;
         end
         % Give CHs their role
         for i = self.ch_indices
@@ -322,7 +322,7 @@ end
         % Default all nodes to MEMBER
         for i = 1:self.N
             self.nodes(i).role = 'MEMBER';
-            self.nodes(i).cluster_head_id = 0;
+            self.nodes(i).cluster_head_id = -1;
         end
         self.ch_indices = [];
 
@@ -359,7 +359,7 @@ end
 
             if strcmp(self.nodes(i).role, 'MEMBER') && self.nodes(i).E ~= 0
                 min_dist = Inf;
-                closest_ch = 0;
+                closest_ch = -1;
                 for ch_idx = self.ch_indices
                     d = sqrt((self.nodes(i).x - self.nodes(ch_idx).x)^2 + (self.nodes(i).y - self.nodes(ch_idx).y)^2);
                     if d < min_dist

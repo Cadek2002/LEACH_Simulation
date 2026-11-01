@@ -1,4 +1,5 @@
 import WSN.*
+import IDE.*
 
 
 
@@ -25,18 +26,32 @@ net.generate_wsn_topology();
 num_rounds = 40;
 history = cell(1, num_rounds);
 
+ide = IDE();
+ide.run(net, 100, 10)
+disp(ide.top_member)
+
+net.Copy()
+
 for r = 1:num_rounds
     net.Round = r;
+    % % Clustering Algo
+    % net.LEACH_Clustering();
+    % 
+    % 
+    % 
+    % %assign each member node to its closest CH
+    % net.LEACH_Clustering();
+    % net.LEACH_ClusterAssignment();
+
+
     % Clustering Algo
-    net.LEACH_Clustering();
-    
-    
-    
+    net.CRPIDE_Clustering(ide);
+
+
+
     %assign each member node to its closest CH
-    net.LEACH_Clustering();
-    net.LEACH_ClusterAssignment();
-
-
+    net.CRPIDE_Clustering();
+    net.CRPIDE_ClusterAssignment();
 
 
 
