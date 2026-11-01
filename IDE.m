@@ -241,8 +241,6 @@ classdef IDE < handle
         function run(self, context, numIterations, populationSize)
             self.context = context;
 
-
-
             numVirtualNodes = populationSize;
             self.x_L = repmat([0, 0], 1, numVirtualNodes);
             self.x_U = repmat([self.context.width, self.context.height], 1, numVirtualNodes);

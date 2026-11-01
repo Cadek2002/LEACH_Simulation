@@ -38,8 +38,10 @@ for r = 1:num_rounds
 
     %build a transmission plan
     net.LEACH_TransmissionPlan();
-    
-    %Send to CHs
+
+
+
+    %Member Nodes send data to cluster heads
     for i = 1:net.N
         if strcmp(net.nodes(i).role, 'MEMBER') && net.nodes(i).E > 0
             ch_idx = net.nodes(i).cluster_head_id;
@@ -61,24 +63,25 @@ for r = 1:num_rounds
         end
     end
 
-
+    %CHs 
+    transmission_plan = net.execute_transmission_plan();
+    net.execute_transmission_plan(transmission_plan);
     
-    % CHs agg and send to BS
-    for ch_idx = net.ch_indices
-        if net.nodes(ch_idx).E > 0
-            % Count connected cluster members
-            cluster_members = sum([net.nodes.cluster_head_id] == ch_idx & strcmp({net.nodes.role}, 'MEMBER'));
-            
-            % Compression cost
-            E_agg = (cluster_members + 1) * net.k_data * net.E_DA;
-            net.nodes(ch_idx).E = max(0, net.nodes(ch_idx).E - E_agg);
-            
-
-            % Transmit to BS
-            [tx_updated, ~, ~] = net.send_packet(net.nodes(ch_idx), net.BS, net.k_data);
-            net.nodes(ch_idx).E = tx_updated.E;
-        end
-    end
+    % % CHs agg and send to BS
+    % for ch_idx = net.ch_indices
+    %     if net.nodes(ch_idx).E > 0
+    %         % Count connected cluster members
+    %         cluster_members = sum([net.nodes.cluster_head_id] == ch_idx & strcmp({net.nodes.role}, 'MEMBER'));
+    % 
+    %         % Compression cost
+    %         E_agg = (cluster_members + 1) * net.k_data * net.E_DA;
+    %         net.nodes(ch_idx).E = max(0, net.nodes(ch_idx).E - E_agg);
+    % 
+    %         % Transmit to BS
+    %         [tx_updated, ~, ~] = net.send_packet(net.nodes(ch_idx), net.BS, net.k_data);
+    %         net.nodes(ch_idx).E = tx_updated.E;
+    %     end
+    % end
     history{r} = copy(net);
 end
 

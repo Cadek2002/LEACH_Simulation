@@ -413,7 +413,7 @@ end
 
         distances = hypot(cluster_heads.x - self.BS.x, cluster_heads.y - self.BS.y);
         
-        [~, sortedOrder] = sort(distances, 'descend');
+        [distances, sortedOrder] = sort(distances, 'descend');
         %distances = distances(sortedOrder);
 
 
@@ -422,10 +422,7 @@ end
         %iterate through sorted list of cluster heads
 
         for ch = 1:numel(cluster_heads)+1
-
-            %select the cluster heads that are within a 90 degree angle of
-            %the current node relative to the base station and who are
-            %closer to the base station
+            currentIdx = sortedOrder(ch);
 
             %calculate angle of cluster_heads(ch) and base station
             currentHead = cluster_heads(ch);
@@ -434,14 +431,76 @@ end
             currentAngle = atan2(currentHead.y - self.BS.y, currentHead.x - self.BS.x);
             angleDifference = abs(atan2(sin(headAngles - currentAngle), cos(headAngles - currentAngle)));
 
+            candidates = find(angleDifference <= pi/4 & distances < distances(ch));
 
-            candidates = find(angleDifference <= pi/4 & distances(sortedOrder) < distances(sortedOrder(ch)));
+            %No remaining Candidates = 
+            if isempty(candidates)
+                transmission_plan(ch) = [currentIdx, -1];
+            
+            avg_candidate_energy = mean(candidates.E);
+            avg_candidate_distance = mean([hypot(candidates.x - self.BS.x, candidates.y - self.BS.y)]);
+            avg_candidate_angle = mean(sin(angleDifference));
 
+            priorities = ide.a * (candidates.E / avg_candidate_energy) + ...
+                         ide.b * ((avg_candidate_distance)/([hypot(candidates.x - self.BS.x, candidates.y - self.BS.y)])) + ...
+                         ide.c * ((avg_candidate_angle) / ([sin(angleDifference)]));
 
+            [~, maxPriorityIdx] = max(priorities);
 
-            priorities = ide.a * (cluster_heads.i / (sum() / length() )) + ide.b * () + ide.c * ()
+            %get index of the current cluster head and highest priority
+            %candidate in the original ch_indices array
+            
+            candidateIdx = sortedOrder(candidates(maxPriorityIdx));
+            transmission_plan(ch) = [currentIdx, candidateIdx];
+
+            end
         end
+    end
 
+    function execute_transmission_plan(self, transmission_plan)
+        %create an array with the same number of elements as the ch_indices
+        %array, then set each element to the number of nodes with that
+        %index as its cluster_HEAD
+        % Count member transmissions assigned to each cluster head
+        memberCounts = zeros(numel(self.ch_indices));
+        for nodeIdx = 1:self.N
+            chIdx = self.nodes(nodeIdx).cluster_head_id;
+            if chIdx > 0
+                memberCounts(chIdx) = memberCounts(chIdx) + 1;
+            end
+        end
+        % Execute each planned transmission and update node energies
+        
+        ch_data = memberCounts * self.k_data;
+
+        
+        for planIdx = 1:size(transmission_plan, 1)
+            
+            txIdx = transmission_plan(planIdx, 1);
+            rxIdx = transmission_plan(planIdx, 2);
+
+            txChIdx = find(self.ch_indices == txIdx);
+            rxChIdx = find(self.ch_indices == rxIdx);
+
+            if txIdx <= 0 || self.nodes(txIdx).E <= 0
+                continue;
+            end
+            rxNode = self.BS;
+            if rxIdx > 0
+                rxNode = self.nodes(rxIdx);
+            end
+            %send agg bits from tx to rx in transmission plan
+            [self.nodes(txIdx), rxNode] = self.send_packet(self.nodes(txIdx), rxNode, ch_data(txChIdx));
+            %copy changes (energy) over
+            if rxIdx > 0
+                self.nodes(rxIdx) = rxNode;
+            end
+            % Forward Aggregated data if member survived
+            if rxIdx > 0 && self.nodes(rxIdx).E > 0
+                ch_data(rxChIdx) = ch_data(rxChIdx) + ch_data(txChIdx);
+            end
+        end
+    end
 
     end
     methods (Access = protected)
