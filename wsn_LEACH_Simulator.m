@@ -23,17 +23,35 @@ net.Sensor_Range = 90; % Sensor range, default to max
 % Topo func (currently a random rectangle with BS at center
 net.generate_wsn_topology();
 
-num_rounds = 2;
+num_rounds = 20;
 history = cell(1, num_rounds);
 
 ide = IDE();
-ide.run(net, 200, 50, 20)
-disp(ide.top_member)
+ide.maxRounds = num_rounds;
+%ide.run(net, 200, 50, 20)
+%disp(ide.top_member)
 
 %net.Copy()
 
 for r = 1:num_rounds
     net.Round = r;
+
+    ide.run(net, 200, 50, 20)
+    disp(ide.top_member)
+
+    progress = (net.Round - 1) / max(num_rounds - 1, 1);
+
+    VCH_positions = reshape(ide.top_member_vector, 2, []).';
+
+    f4 = multiHopCandidacy(VCH_positions, net.BS);
+
+    f5 = residualEnergyFactor( ...
+        VCH_positions, net.nodes, net.E_init, ide.mu);
+
+    dynamicEnergy = progress * f5;
+
+    fprintf('Round %d: f4 = %.4f, f5 = %.4f, Dynamic Energy = %.4f\n', ...
+        r, f4, f5, dynamicEnergy);
     % % Clustering Algo
     % net.LEACH_Clustering();
 
@@ -45,13 +63,19 @@ for r = 1:num_rounds
 
 
     % Clustering Algo
-    net.CRPIDE_Clustering(ide);
+    %net.CRPIDE_Clustering(ide);
 
 
 
     %assign each member node to its closest CH
     net.CRPIDE_Clustering(ide);
     net.CRPIDE_ClusterAssignment(ide);
+
+    if any([net.nodes(net.ch_indices).E] <= 0)
+        error('A dead node was selected as a cluster head!');
+    else
+        disp('CH check passed: all selected cluster heads are alive.');
+    end
 
 
 

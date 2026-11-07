@@ -320,36 +320,53 @@ end
     % Assignes clusters based on a set of virtual clusters and a priority
     % system
     function CRPIDE_Clustering(self, ide)
+
         % Default all nodes to MEMBER
         for i = 1:self.N
             self.nodes(i).role = 'MEMBER';
             self.nodes(i).cluster_head_id = -1;
         end
+
         self.ch_indices = [];
 
-        %CH election
-        for i = 1:ide.D/2
-            %get distance of each node to the VCH
-            distances = hypot([self.nodes.x] - ide.top_member.x(i), [self.nodes.y] - ide.top_member.y(i));
+        % Only allow alive nodes to become CHs
+        aliveNodes = find([self.nodes.E] > 0);
 
-            %calc priorities
-            denom = max(distances)/min(distances);
-            priorities = ide.mu * ((max(distances) - distances)/denom) + (1-ide.mu) * ([self.nodes.E] / self.E_init);
-            %get best node that hasnt already been picked yet
-            candidateIdx = setdiff(1:numel(priorities), self.ch_indices);
+        % CH election
+        for i = 1:ide.D/2
+
+            % Get distance of each node to the VCH
+            distances = hypot( ...
+                [self.nodes.x] - ide.top_member.x(i), ...
+                [self.nodes.y] - ide.top_member.y(i));
+
+            % Calculate priorities
+            denom = max(distances) / max(min(distances), eps);
+
+            if denom == 0
+                denom = 1;
+            end
+
+            priorities = ide.mu * ((max(distances) - distances) / denom) ...
+                    + (1 - ide.mu) * ([self.nodes.E] / self.E_init);
+
+            % Get best node that has not already been picked
+            candidateIdx = setdiff(aliveNodes, self.ch_indices);
+
+            if isempty(candidateIdx)
+                break;
+            end
+
             [~, localMax] = max(priorities(candidateIdx));
             maxIndex = candidateIdx(localMax);
-            
-            %select the candidate node
+
+            % Select the candidate node
             if ~ismember(maxIndex, self.ch_indices)
                 self.ch_indices(end + 1) = maxIndex;
                 self.nodes(maxIndex).role = 'CH';
                 self.nodes(maxIndex).cluster_head_id = -1;
             end
         end
-
-
-        
     end
 
     function LEACH_ClusterAssignment(self)

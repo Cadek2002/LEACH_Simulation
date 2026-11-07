@@ -1,15 +1,18 @@
 classdef IDE < handle
     
     properties
-        alpha double {mustBePositive} = .3;
-        beta double {mustBePositive} = .3;
-        gamma double {mustBePositive} = .4;
+        alpha double {mustBePositive} = .243;
+        beta double {mustBePositive} = .243;
+        gamma double {mustBePositive} = .324;
+        delta double {mustBeNonnegative} = .09;
+        epsilon double {mustBeNonnegative} = .10;
+        maxRounds double {mustBePositive} = 2;
         mu double {mustBePositive} = .5;
         a double {mustBePositive} = .5;
         b double {mustBePositive} = .2;
         c double {mustBePositive} = .3;
         m {mustBePositive} = 100;
-        context struct;
+        context;
         mutation_rate double {mustBePositive} = .9;
         crossover_rate = .9;
         exponential_crossover_prob = .6;
@@ -155,11 +158,26 @@ classdef IDE < handle
             end 
         
             VCH = VCH / denom;
+            % Calculate multihop factor
+            VCH_positions = reshape(row, 2, []).';
+            f4 = multiHopCandidacy(VCH_positions, self.context.BS);
+            progress = (self.context.Round - 1) / max(self.maxRounds - 1, 1);
+
+            f5 = residualEnergyFactor( ...
+                VCH_positions, self.context.nodes, ...
+                self.context.E_init, self.mu);
+
+            dynamicEnergy = progress * f5;
             grid_score = nnz(gridCovered);
 
             %full CRPIDE fitness function
-            score = self.alpha * VCH + self.beta * (sum(covered) / self.context.N) + self.gamma * (1 - (grid_score / (self.m + 1)^2)); 
-        
+            %score = self.alpha * VCH + self.beta * (sum(covered) / self.context.N) + self.gamma * (1 - (grid_score / (self.m + 1)^2)); 
+            score = self.alpha * VCH ...
+            + self.beta * (sum(covered) / self.context.N) ...
+            + self.gamma * (1 - (grid_score / (self.m + 1)^2)) ...
+            + self.delta * f4 ...
+            + self.epsilon * dynamicEnergy;
+
         end
     
         function debug = run_iteration(self)
