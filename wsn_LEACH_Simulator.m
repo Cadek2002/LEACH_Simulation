@@ -26,7 +26,7 @@ net.generate_wsn_topology();
 
 num_rounds = 1000;
 IDE_Interval = 1010;
-packets_received = 0;
+packets_received = zeros([num_rounds, 1]);
 
 history = cell(1, num_rounds);
 
@@ -84,7 +84,7 @@ for r = 1:num_rounds
     if any([net.nodes(net.ch_indices).E] <= 0)
         error('A dead node was selected as a cluster head!');
     else
-        disp('CH check passed: all selected cluster heads are alive.');
+        %disp('CH check passed: all selected cluster heads are alive.');
     end
 
 
@@ -115,7 +115,7 @@ for r = 1:num_rounds
 
     %Build CH transmission plan and execute
     transmission_plan = net.CRPIDE_Transmission_Plan(ide);
-    packets_received = packets_received + net.execute_transmission_plan(transmission_plan);
+    packets_received(r) = net.execute_transmission_plan(transmission_plan);
     
 
     
