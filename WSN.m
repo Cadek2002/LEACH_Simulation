@@ -401,13 +401,14 @@ end
                 ch_y = [self.nodes(self.ch_indices).y];
                 distances = hypot(ch_x - self.nodes(nodeIdx).x, ch_y - self.nodes(nodeIdx).y);
 
-                % Grab all ch_indices within sensor range
-                valid_mask = (distances <= self.Sensor_Range);
+                % Grab all ch_indices within sensor range (MULT SENSOR
+                % RANGE
+                valid_mask = (distances <= (self.Sensor_Range * 4));
                 eligibleCh = self.ch_indices(valid_mask);
                 eligibleDistances = distances(valid_mask);
 
-                % If no CH is within sensor range, default to Base Station (-1)
-                if isempty(eligibleCh)
+                % If no CH is within sensor range, or the BS is the closest CH, default to Base Station (-1)
+                if isempty(eligibleCh) || min(eligibleDistances) >= hypot(self.nodes(nodeIdx).x - self.BS.x, self.nodes(nodeIdx).y - self.BS.y)
                     self.nodes(nodeIdx).cluster_head_id = -1;
                     continue;
                 end
@@ -509,11 +510,12 @@ end
         end
     
 
-    function execute_transmission_plan(self, transmission_plan)
+    function bytes_received = execute_transmission_plan(self, transmission_plan)
         %create an array with the same number of elements as the ch_indices
         %array, then set each element to the number of nodes with that
         %index as its cluster_HEAD
         % Count member transmissions assigned to each cluster head
+        bytes_received = 0;
         memberCounts = ones(length(self.ch_indices), 1);
         for nodeIdx = 1:self.N
             chIdx = self.ch_indices == self.nodes(nodeIdx).cluster_head_id;
@@ -550,6 +552,10 @@ end
             %copy changes (energy) over
             if rxIdx > 0
                 self.nodes(rxIdx) = rxNode;
+            else
+                if self.nodes(txIdx).E <= 0
+                    bytes_received = bytes_received + ch_data(txChIdx);
+                end
             end
             % Forward Aggregated data if member survived
             if rxIdx > 0 && self.nodes(rxIdx).E > 0

@@ -269,8 +269,6 @@ classdef IDE < handle
                 self.run_iteration();
             end
 
-
-
             fitness = self.evaluate(self.P, @(row) self.CRPIDE_fitness(row));
             varNames = [compose("x%d", 1:size(self.P, 2)), "fitness"];
 

@@ -11,19 +11,23 @@ net = WSN();
 
 %% WSN Network Setup
 net.N = 100;                 % Total nodes
-net.field_width = 400;             % Field width (meters)
-net.field_height = 400;            % Field height (meters)
+net.field_width = 100;             % Field width (meters)
+net.field_height = 100;            % Field height (meters)
 net.E_init = 0.5;          % Initial energy (Joules)
 net.k_data = 5000;        % Data packet size (bits)
 net.E_DA = 5e-9;             % Data Aggregation Energy (5 nJ/bit/signal)
 net.P = .05;                 % Desired portion of CHs
 net.Round = 1;               % Current Round
-net.Sensor_Range = 90; % Sensor range, default to max
+net.Sensor_Range = 20; % Sensor range, default to max
+
 
 % Topo func (currently a random rectangle with BS at center
 net.generate_wsn_topology();
 
-num_rounds = 20;
+num_rounds = 1000;
+IDE_Interval = 1010;
+packets_received = 0;
+
 history = cell(1, num_rounds);
 
 ide = IDE();
@@ -31,27 +35,34 @@ ide.maxRounds = num_rounds;
 %ide.run(net, 200, 50, 20)
 %disp(ide.top_member)
 
+
+
 %net.Copy()
 
 for r = 1:num_rounds
     net.Round = r;
 
-    ide.run(net, 200, 50, 20)
-    disp(ide.top_member)
+    %run IDE every x rounds
+    if mod(r-1, IDE_Interval) == 0
 
-    progress = (net.Round - 1) / max(num_rounds - 1, 1);
+        ide.run(net, 100, 50, 20)
+        disp(ide.top_member)
+    
+        progress = (net.Round - 1) / max(num_rounds - 1, 1);
+    
+        VCH_positions = reshape(ide.top_member_vector, 2, []).';
+    
+        f4 = multiHopCandidacy(VCH_positions, net.BS);
+    
+        f5 = residualEnergyFactor( ...
+            VCH_positions, net.nodes, net.E_init, ide.mu);
+    
+        dynamicEnergy = progress * f5;
+    
+        fprintf('Round %d: f4 = %.4f, f5 = %.4f, Dynamic Energy = %.4f\n', ...
+            r, f4, f5, dynamicEnergy);
 
-    VCH_positions = reshape(ide.top_member_vector, 2, []).';
-
-    f4 = multiHopCandidacy(VCH_positions, net.BS);
-
-    f5 = residualEnergyFactor( ...
-        VCH_positions, net.nodes, net.E_init, ide.mu);
-
-    dynamicEnergy = progress * f5;
-
-    fprintf('Round %d: f4 = %.4f, f5 = %.4f, Dynamic Energy = %.4f\n', ...
-        r, f4, f5, dynamicEnergy);
+    end
     % % Clustering Algo
     % net.LEACH_Clustering();
 
@@ -67,7 +78,6 @@ for r = 1:num_rounds
 
 
 
-    %assign each member node to its closest CH
     net.CRPIDE_Clustering(ide);
     net.CRPIDE_ClusterAssignment(ide);
 
@@ -105,7 +115,7 @@ for r = 1:num_rounds
 
     %Build CH transmission plan and execute
     transmission_plan = net.CRPIDE_Transmission_Plan(ide);
-    net.execute_transmission_plan(transmission_plan);
+    packets_received = packets_received + net.execute_transmission_plan(transmission_plan);
     
 
     
@@ -128,3 +138,10 @@ for r = 1:num_rounds
 end
 
 net.visualize_WSN_history(history)
+
+% Metrics after the complete LEACH simulation
+leachMetrics = collect_wsn_metrics(history, packets_received, 'LEACH');
+export_wsn_metrics(leachMetrics, 'LEACH_metrics.csv');
+plot_wsn_metrics(leachMetrics);
+fprintf('FND: %g, HND: %g, LND: %g (NaN = not reached)\n', ...
+    leachMetrics.FND, leachMetrics.HND, leachMetrics.LND);
