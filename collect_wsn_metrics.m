@@ -1,4 +1,46 @@
-function metrics = collect_wsn_metrics(history, packetsAtBS, protocol)
+function metricsArray = collect_wsn_metrics(histories, packetsAtBSList, protocols)
+%COLLECT_WSN_METRICS Collect round-level network performance for multiple WSN protocols.
+%   histories: cell array where each element is a cell array of WSN snapshots.
+%   packetsAtBSList: cell array where each element is the packetsAtBS vector for that protocol.
+%   protocols: cell array of descriptive labels (e.g., {'LEACH', 'CRPIDE'}).
+
+    if nargin < 3 || isempty(protocols)
+        protocols = arrayfun(@(i) sprintf('Protocol %d', i), 1:numel(histories), 'UniformOutput', false);
+    end
+    if nargin < 2 || isempty(packetsAtBSList)
+        packetsAtBSList = cell(size(histories));
+    end
+    
+    nProtocols = numel(histories);
+    % Preallocate struct array with identical fields
+    metricsArray = [];
+
+    for p = 1:nProtocols
+        h = histories{p};
+        
+        % Handle optional/empty packet vectors for individual protocols
+        if p <= numel(packetsAtBSList) && ~isempty(packetsAtBSList{p})
+            pBS = packetsAtBSList{p};
+        else
+            pBS = [];
+        end
+        
+        prot = protocols{p};
+        
+        % Call your single-protocol function
+        singleMetrics = collect_wsn_metrics_single(h, pBS, prot);
+        
+        % Accumulate into an array of structs
+        if p == 1
+            metricsArray = singleMetrics;
+        else
+            metricsArray(p) = singleMetrics;
+        end
+    end
+end
+
+
+function metrics = collect_wsn_metrics_single(history, packetsAtBS, protocol)
 %COLLECT_WSN_METRICS Collect round-level network performance from WSN snapshots.
 % history: cell array of WSN objects, one snapshot per completed round.
 % packetsAtBS: vector of successfully delivered BS packets PER ROUND.

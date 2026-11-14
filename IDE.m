@@ -27,6 +27,9 @@ classdef IDE < handle
     
     
     methods
+
+        
+
         function initialize_population(self, N, Q)
             % Define J using the pop and Q (any odd number)
             J = 1;
@@ -110,6 +113,7 @@ classdef IDE < handle
         
         function score = CRPIDE_fitness(self, row)
             VCH = 0;
+            grid_range = self.context.Sensor_Range * .5;
        
             %define vector of 0s of length equal to the number of nodes
             
@@ -128,13 +132,15 @@ classdef IDE < handle
                 
                 [x0, y0] = ndgrid(x_edges(1:end-1), y_edges(1:end-1));
                 [x1, y1] = ndgrid(x_edges(2:end), y_edges(2:end));
+
+                
         
                 % if the four corners of the grid are in range than the grid space
                 % is fully encompassed
-                enclosed = hypot(x0 - virtual_x, y0 - virtual_y) <= self.context.Sensor_Range & ...
-                           hypot(x0 - virtual_x, y1 - virtual_y) <= self.context.Sensor_Range & ...
-                           hypot(x1 - virtual_x, y0 - virtual_y) <= self.context.Sensor_Range & ...
-                           hypot(x1 - virtual_x, y1 - virtual_y) <= self.context.Sensor_Range;
+                enclosed = hypot(x0 - virtual_x, y0 - virtual_y) <= grid_range & ...
+                           hypot(x0 - virtual_x, y1 - virtual_y) <= grid_range & ...
+                           hypot(x1 - virtual_x, y0 - virtual_y) <= grid_range & ...
+                           hypot(x1 - virtual_x, y1 - virtual_y) <= grid_range;
        
         
                 gridCovered = gridCovered | enclosed;
@@ -143,7 +149,7 @@ classdef IDE < handle
                     node = self.context.nodes(j);
                     dist = hypot(node.x - virtual_x, node.y - virtual_y);
         
-                    if dist <= self.context.Sensor_Range
+                    if dist <= grid_range
                         VCH = VCH + hypot(node.x - virtual_x, node.y - virtual_y);
                         covered(j) = 1;
                     end
